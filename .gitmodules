@@ -1,0 +1,8 @@
+[submodule "admin"]
+	path = admin
+	url = https://github.com/hamr-hub/price-memory-admin.git
+	branch = main
+[submodule "spider"]
+	path = spider
+	url = https://github.com/hamr-hub/price-memory-spider.git
+	branch = main
