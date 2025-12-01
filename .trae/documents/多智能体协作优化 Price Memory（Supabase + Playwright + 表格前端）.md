@@ -73,6 +73,34 @@
 - 单元/集成/E2E 测试落地；日志与指标面板
 - CI/CD 工作流与预发布验证
 
+## 已实施进展
+- 后端：任务表扩展 `scheduled_at/started_at/completed_at/result_message` 并在 `init_db` 自动补列；`/export` 与 `/products/{id}/export` 均支持 `start_date/end_date` 时间范围筛选；统一响应包裹结构与分页。
+- 前端：自定义 Refine `dataProvider` 对接后端分页与详情；商品列表列对齐为 `id/name/url/category/last_updated`；支持批量导出；详情页展示统计与历史价格表。
+- Playwright：修复辅助脚本、统一基础域与延迟测量；为后续反爬与并发控制打基础。
+- 测试：后端单测全部通过（6 passed），包含导出与任务执行链路。
+
+## 语法问题修复说明
+- Python 装饰器语法要求：装饰器（如 `@router.post(...)`）下方必须紧接函数定义；不可插入其他语句或变量声明。
+- 问题示例（错误）：
+  ```py
+  @router.post("/spider/tasks/{task_id}/execute")
+  RATE_LIMIT: dict = {}
+  def execute_task(task_id: int):
+      ...
+  ```
+- 正确用法：将变量移至模块顶部或函数外部其他位置：
+  ```py
+  RATE_LIMIT: Dict[str, float] = {}
+  @router.post("/spider/tasks/{task_id}/execute")
+  def execute_task(task_id: int):
+      ...
+  ```
+
+## 运行与环境
+- 后端：`uvicorn spider.main:app --host 127.0.0.1 --port 8000`
+- 前端：设置 `VITE_API_URL=http://127.0.0.1:8000/api/v1`，运行 `npm run dev`
+- Supabase：提供 `SUPABASE_URL` 与 `SUPABASE_KEY` 即可启用，默认回退至 SQLite `spider.db`
+
 ## 验收标准
 - E2E 打通：添加商品→执行抓取→表格展示→导出文件
 - 多区域解析稳定（≥95% 成功率），抓取失败具备可追踪信息
