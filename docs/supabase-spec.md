@@ -44,6 +44,7 @@
 - tasks：`(product_id)` 支持按商品检索任务。
 - 唯一约束：`user_follows(user_id, product_id)`、`pool_products(pool_id, product_id)`、`collection_products(collection_id, product_id)`、`collection_members(collection_id, user_id)`。
 - 选择性索引：`pushes(recipient_id, status)`、`collections(owner_user_id)`。
+- 搜索优化：启用 `pg_trgm`，建立 `products(name,url)` 的 GIN trigram 索引。
 
 ## 实时订阅
 - `public.prices` 已加入 `supabase_realtime` 发布，前端可订阅价格变化以刷新趋势与图表。
@@ -54,11 +55,13 @@
 - 告警规则从 `alerts` 读取；告警触发写入 `pushes` 并由前端或后台通知用户。
 - 公共池与选择逻辑通过 `pools`、`pool_products` 表实现；用户关注走 `user_follows`。
 - 集合与协作使用 `collections`、`collection_products`、`collection_members` 三表与 RLS 保证多方权限。
+ - 辅助视图：`v_latest_prices` 提供每商品最新价格；`v_user_follow_products` 提供关注商品明细。
 
 ## 初始化与迁移
 - 执行 `supabase/schema.sql` 中的 DDL 在 Supabase SQL Editor 或 CI 初始化环境。
 - 创建 Storage bucket：`exports`、`images` 并配置公开/受限访问策略视业务需要。
 - 将后台采集服务改为写入 Supabase Postgres（服务密钥环境下绕过 RLS）。
+ - 可选：启用 `pg_trgm` 扩展以支持模糊搜索。可创建每日配额重置函数 `reset_daily_quota()`，结合 `pg_cron` 进行计划任务。
 
 ## 示例查询
 - 查询某商品最近价格：
@@ -67,6 +70,18 @@
   - `select p.* from public.products p join public.user_follows f on f.product_id = p.id where f.user_id = auth.uid();`
 - 查询公开池商品：
   - `select pr.* from public.pool_products pp join public.pools pl on pl.id = pp.pool_id and pl.is_public join public.products pr on pr.id = pp.product_id;`
+- 查询最新价格视图：
+  - `select * from public.v_latest_prices where product_id = $1;`
+- 查询我的关注视图：
+  - `select * from public.v_user_follow_products where user_id = auth.uid();`
+
+## RPC 示例
+- 获取日级价格趋势：
+  - `select * from public.rpc_product_daily_prices($1, $2::date, $3::date);`
+- 关注商品：
+  - `select public.rpc_follow_product($1);`
+- 取消关注：
+  - `select public.rpc_unfollow_product($1);`
 
 ## 备注
 - 若需在数据库层实现价格告警触发，可增加 `prices` 插入触发器调用 PL/pgSQL 比较最近价格与阈值后写入 `pushes`；当前建议由后台服务统一评估以便跨站点规则扩展。
