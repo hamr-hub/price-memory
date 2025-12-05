@@ -17,6 +17,10 @@
 - collection_products：集合内商品。
 - collection_members：集合成员与角色。
 - alerts：价格告警规则（阈值/百分比，状态）。
+ - runtime_nodes：运行时节点（心跳、并发、延迟、队列与累计完成）。
+ - node_commands：节点命令队列（暂停/恢复/测试/探测等）。
+ - crawl_logs：节点执行日志与工件索引（trace/har/screenshot/video 链接）。
+ - sites：站点与区域信息（`domain/region_code/currency`），用于归档与展示转换。
 
 ## 存储设计
 - 用户使用 Supabase Auth，业务层以 `profiles.id`（UUID）作为外键；与 `auth.users.id` 一致。
@@ -40,28 +44,33 @@
 - alerts：仅用户自身可读写删。
 
 ## 索引与性能
-- prices：`(product_id, created_at desc)` 覆盖趋势与时间序查询。
-- tasks：`(product_id)` 支持按商品检索任务。
+- prices：启用 TimescaleDB 将 `prices` 设为 hypertable（`created_at` 时间列），并提供连续聚合 `mv_prices_1h`/`mv_prices_1d`（`time_bucket` 聚合平均/最大/最小价）；保留 `(product_id, created_at desc)` 查询能力。
+- tasks：`(product_id)` 支持按商品检索任务；新增 `status='pending'` 的部分索引优化 worker 拉取。
 - 唯一约束：`user_follows(user_id, product_id)`、`pool_products(pool_id, product_id)`、`collection_products(collection_id, product_id)`、`collection_members(collection_id, user_id)`。
 - 选择性索引：`pushes(recipient_id, status)`、`collections(owner_user_id)`。
-- 搜索优化：启用 `pg_trgm`，建立 `products(name,url)` 的 GIN trigram 索引。
+- 搜索优化：启用 `pg_trgm`；JSONB 属性通过 GIN 索引（`products.attributes`、`skus.attributes`）。
+- 运行时监控：`runtime_nodes(last_seen)`、`node_commands(node_id,status)`、`crawl_logs(job_id)` 辅助索引。
 
 ## 实时订阅
 - `public.prices` 已加入 `supabase_realtime` 发布，前端可订阅价格变化以刷新趋势与图表。
 - 推荐在前端使用 `on('postgres_changes', ...)` 订阅 `prices`、必要时订阅 `products`。
+ - 运行时建议订阅 `runtime_nodes` UPDATE/INSERT 以刷新节点状态，订阅 `crawl_logs(job_id)` 实时查看日志与工件。
 
 ## 与现有逻辑的映射
-- 采集任务执行后写入 `prices`；趋势/导出接口读取 `prices`。
+- 采集任务执行后写入 `prices`；趋势/导出接口读取 `prices`，可直接访问 `mv_prices_1h`/`mv_prices_1d` 实现高效时间序聚合。
+- 告警评估保持后端统一评估；可选启用数据库侧触发：`evaluate_price_alerts()` 在 `prices` 插入后根据 `alerts` 写入 `pushes`。
 - 告警规则从 `alerts` 读取；告警触发写入 `pushes` 并由前端或后台通知用户。
 - 公共池与选择逻辑通过 `pools`、`pool_products` 表实现；用户关注走 `user_follows`。
 - 集合与协作使用 `collections`、`collection_products`、`collection_members` 三表与 RLS 保证多方权限。
  - 辅助视图：`v_latest_prices` 提供每商品最新价格；`v_user_follow_products` 提供关注商品明细。
+ - 运行时：节点心跳周期性更新 `runtime_nodes`；Admin 下发命令写入 `node_commands`；执行过程中生成 `crawl_logs` 附带工件链接。
 
 ## 初始化与迁移
 - 执行 `supabase/schema.sql` 中的 DDL 在 Supabase SQL Editor 或 CI 初始化环境。
 - 创建 Storage bucket：`exports`、`images` 并配置公开/受限访问策略视业务需要。
 - 将后台采集服务改为写入 Supabase Postgres（服务密钥环境下绕过 RLS）。
- - 可选：启用 `pg_trgm` 扩展以支持模糊搜索。可创建每日配额重置函数 `reset_daily_quota()`，结合 `pg_cron` 进行计划任务。
+- 启用扩展：`pg_trgm`、`timescaledb`；并运行 `create_hypertable('public.prices','created_at', if_not_exists=>true)`。
+- 初始化数据：运行 `python -m spider.src.scripts.seed_initial_data` 写入常见汇率与 Amazon 多区域站点信息。
 
 ## 示例查询
 - 查询某商品最近价格：
@@ -85,3 +94,10 @@
 
 ## 备注
 - 若需在数据库层实现价格告警触发，可增加 `prices` 插入触发器调用 PL/pgSQL 比较最近价格与阈值后写入 `pushes`；当前建议由后台服务统一评估以便跨站点规则扩展。
+- 商品属性统一使用 JSONB 存储（`products.attributes`、`skus.attributes`），支持灵活扩展与查询。
+- 任务支持 `source_url` 字段用于溯源；后台 Worker 运行时会补充来源地址。
+ - 多币种支持：引入 `exchange_rates(currency, rate_to_usd)` 并提供 `rpc_convert_price`；前端可调用 `admin/src/utils/currency.ts` 进行展示转换。
+- 汇率转换：
+  - `select public.rpc_convert_price(100, 'USD', 'CNY');`
+- 聚合导出（按 ID 列表与区间）：
+  - `select * from public.rpc_prices_aggregate(array[$1,$2,$3], '1 hour', now() - interval '24 hour', now());`

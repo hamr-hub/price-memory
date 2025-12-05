@@ -67,6 +67,7 @@ GET /api/v1/products/search?page=1&size=20&search=airpods&sort_by=last_updated&s
 
 - POST `/users`：创建用户（自动生成 `api_key`、基础配额）
 - GET `/users`：用户列表（支持 `search`）
+- 搜索范围：`username`、`display_name`、`email`
 - GET `/users/{user_id}`：用户详情（含关注数）
 - GET `/products/{product_id}/followers`：商品关注者列表
 - GET `/users/{user_id}/follows`：用户关注的商品列表
@@ -79,9 +80,24 @@ GET /api/v1/products/search?page=1&size=20&search=airpods&sort_by=last_updated&s
 - GET `/users/{user_id}/pushes?box=inbox|outbox`：收件箱或发件箱
 - POST `/pushes/{push_id}/status`：更新状态，Body: `{ status: accepted|rejected }`
 
-## 计划中接口
+## 公共池与集合协作接口
 
-- 公共池与集合协作接口：当前版本未提供，后续将按路线图逐步实现（公共池商品管理、集合成员协作与 Excel 导出）。
+- GET `/pools/public/products`：公共池商品列表（分页：`page`、`size`，筛选：`search`、`category`）
+- GET `/pools/public/categories`：公共池可用类别列表（聚合 `category` 唯一值）
+- POST `/pools/public/products`：将商品加入公共池，Body: `{ product_id }`
+- POST `/users/{user_id}/select_from_pool`：用户从公共池选择并关注，Body: `{ product_id }`
+
+- POST `/collections`：创建集合，Body: `{ name, owner_user_id }`
+- GET `/users/{user_id}/collections`：用户参与的集合列表（分页：`page`、`size`，筛选：`search`、`start_date`、`end_date`、`min_members`、`max_members`、`owner_only`、`owner_id`、`min_products`、`max_products`，排序：`sort_by=last_updated|created_at|name`、`sort_order=asc|desc`）
+- GET `/collections/{collection_id}`：集合详情（包含 `products` 与 `members`）
+- POST `/collections/{collection_id}/products`：集合添加商品，Body: `{ product_id }`
+- DELETE `/collections/{collection_id}/products/{product_id}`：集合移除商品
+- POST `/collections/{collection_id}/share`：分享集合给成员，Body: `{ user_id, role? }`（角色：`admin|editor|viewer`）
+
+### 集合导出
+
+- GET `/collections/{collection_id}/export.xlsx`：导出集合商品价格为 Excel（多 Sheet，支持 `start_date`、`end_date`、`api_key` 配额校验）
+  - 依赖：`openpyxl`；缺失依赖时返回 `{ code: "DEPENDENCY_MISSING" }`
 
 ## 系统接口
 

@@ -1,0 +1,1 @@
+ALTER TABLE runtime_nodes ADD COLUMN concurrency INTEGER NOT NULL DEFAULT 1;
