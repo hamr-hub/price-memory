@@ -11,17 +11,53 @@ Price Memory（价格记忆）是一个商品价格监控与分析系统，帮�
 - **数据库**: Supabase (PostgreSQL)
 - **爬虫**: Playwright
 - **语言**: Python 3.12+
+- **任务调度**: 自研任务调度器
+- **价格监控**: 实时价格变化检测
+- **告警系统**: 多渠道告警推送
 
 ### 前端 (admin/)
 - **框架**: React + TypeScript
 - **UI库**: Ant Design
 - **管理框架**: Refine
 - **构建工具**: Vite
+- **状态管理**: React Query
 
 ### 数据库
 - **主数据库**: Supabase PostgreSQL
 - **实时功能**: Supabase Realtime
 - **认证**: Supabase Auth
+
+## 核心功能
+
+### 🛍️ 商品管理
+- 支持Amazon、淘宝、京东等主流电商平台
+- 自动商品信息提取和更新
+- 商品分类和标签管理
+- 批量商品导入和管理
+
+### 📊 价格监控
+- 实时价格抓取和更新
+- 价格历史记录和趋势分析
+- 智能价格变化检测
+- 多货币支持
+
+### 🔔 告警系统
+- 价格阈值告警
+- 百分比变化告警
+- 多渠道推送（邮件、Webhook、站内消息）
+- 告警冷却机制
+
+### ⚙️ 任务调度
+- 智能任务调度和优先级管理
+- 失败重试机制
+- 并发控制和负载均衡
+- 任务状态监控
+
+### 👥 协作功能
+- 用户管理和权限控制
+- 商品收藏和分享
+- 公共商品池
+- API密钥管理
 
 ## 快速开始
 
@@ -39,8 +75,7 @@ Price Memory（价格记忆）是一个商品价格监控与分析系统，帮�
 ### 2. 克隆项目
 
 ```bash
-git clone https://github.com/hamr-hub/price-memory.git
-cd price-memory
+git clone https://github.com/hamr-hub/price-memory.ge-memory
 ```
 
 ### 3. 后端设置
@@ -79,6 +114,16 @@ echo "VITE_API_URL=http://localhost:8000/api/v1" > .env.local
 
 ### 5. 数据库设置
 
+#### 方式一：自动初始化（推荐）
+
+```bash
+cd spider
+# 配置.env文件中的Supabase连接信息
+python init_database.py
+```
+
+#### 方式二：手动设置
+
 1. 在 [Supabase](https://supabase.com) 创建新项目
 2. 在SQL编辑器中执行 `supabase/schema.sql`
 3. 配置RLS策略（执行 `supabase/policies_and_rpc.sql`）
@@ -110,6 +155,31 @@ pnpm dev
 - 后端API文档: http://localhost:8000/docs
 - 后端健康检查: http://localhost:8000/health
 
+## 生产部署
+
+### Docker 部署（推荐）
+
+```bash
+# 设置部署环境
+./deploy.sh setup
+
+# 编辑生产环境配置
+vim deploy/production/.env
+
+# 部署应用
+./deploy.sh deploy
+
+# 查看服务状态
+./deploy.sh status
+
+# 查看日志
+./deploy.sh logs
+```
+
+### 手动部署
+
+参考 `deploy.sh` 脚本中的配置，手动设置 Nginx、Docker 等服务。
+
 ## 项目结构
 
 ```
@@ -122,55 +192,91 @@ price-memory/
 │   │   ├── pages/         # 页面
 │   │   └── providers/     # 数据提供者
 │   ├── package.json
+│   ├── Dockerfile         # Docker构建文件
 │   └── vite.config.ts
 ├── spider/                 # 后端API服务
 │   ├── src/
 │   │   ├── api/          # API路由
-│   │   ├── config/       # 配置
+│   │   ├── config/       # 配置管理
 │   │   ├── dao/          # 数据访问层
 │   │   ├── playwrite/    # 浏览器自动化
 │   │   ├── runtime/      # 运行时管理
 │   │   ├── services/     # 业务服务
+│   │   │   ├── price_monitor.py    # 价格监控
+│   │   │   └── task_scheduler.py   # 任务调度
 │   │   ├── sites/        # 网站适配器
+│   │   │   ├── amazon.py          # Amazon适配器
+│   │   │   ├── taobao.py          # 淘宝适配器
+│   │   │   ├── jd.py              # 京东适配器
+│   │   │   └── universal.py       # 通用适配器
 │   │   ├── utils/        # 工具函数
 │   │   └── workers/      # 工作进程
 │   ├── main.py           # 应用入口
+│   ├── init_database.py  # 数据库初始化
+│   ├── Dockerfile        # Docker构建文件
 │   └── pyproject.toml
 ├── supabase/              # 数据库脚本
 │   ├── schema.sql        # 表结构
 │   ├── policies_and_rpc.sql # 策略和函数
 │   └── migrations/       # 迁移脚本
-├── docs/                  # 文档
-├── scripts/              # 部署脚本
-└── start_dev.py          # 开发环境启动脚本
+├── deploy/               # 部署配置
+│   └── production/       # 生产环境配置
+├── docs/                 # 文档
+├── start_dev.py         # 开发环境启动脚本
+├── deploy.sh            # 部署脚本
+└── DEVELOPMENT.md       # 开发指南
 ```
 
-## 核心功能
+## 支持的电商平台
 
-### 1. 商品管理
-- 添加/编辑/删除商品
-- 商品分类管理
-- 批量操作
+### 🌍 国际平台
+- **Amazon** (美国、英国、德国、法国、意大利、西班牙、加、日本、印度等)
+- **eBay** (通用支持)
+- **AliExpress** (通用支持)
 
-### 2. 价格监控
-- 自动价格抓取
-- 价格历史记录
-- 价格趋势分析
+### 🇨🇳 国内平台
+- **淘宝** (Taobao)
+- **天猫** (Tmall)
+- **京东** (JD.com)
+- **拼多多** (通用支持)
+- **苏宁易购** (通用支持)
 
-### 3. 告警系统
-- 价格阈值告警
-- 百分比变化告警
-- 多渠道通知（邮件、Webhook、站内消息）
+### 🔧 通用支持
+- 任何包含价格信息的电商网站
+- 自动价格检测和提取
+- 智能货币识别
 
-### 4. 协作功能
-- 公共商品池
-- 用户集合
-- 商品分享
+## 核心功能详解
 
-### 5. 数据导出
-- CSV导出
-- Excel导出
-- 批发指南
+### 1. 智能价格抓取
+- **多平台支持**: 支持主流电商平台的价格抓取
+- **智能解析**: 自动识别价格、货币、商品信息
+- **反爬虫对抗**: 代理轮换、请求头伪装、延迟控制
+- **错误处理**: 完善的重试机制和错误恢复
+
+### 2. 实时价格监控
+- **变化检测**: 实时检测价格变化
+- **历史记录**: 完整的价格历史数据
+- **趋势分析**: 价格走势图表和统计
+- **预测功能**: 基于历史数据的价格预测
+
+### 3. 智能告警系统
+- **多种规则**: 阈值告警、百分比变化、价格区间
+- **多渠道推送**: 邮件、Webhook、站内消息、短信
+- **冷却机制**: 防止告警轰炸
+- **个性化设置**: 用户自定义告警规则
+
+### 4. 任务调度系统
+- **智能调度**: 基于优先级和负载的任务分配
+- **并发控制**: 可配置的并发数量和速率限制
+- **失败重试**: 指数退避重试策略
+- **监控统计**: 详细的任务执行统计和监控
+
+### 5. 用户协作
+- **权限管理**: 基于角色的访问控制
+- **商品分享**: 公共商品池和私人收藏
+- **API接口**: 完整的RESTful API
+- **数据导出**: 多格式数据导出功能
 
 ### 后端开发
 
