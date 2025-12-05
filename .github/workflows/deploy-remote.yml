@@ -1,0 +1,39 @@
+name: Remote Deploy
+
+on:
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Upload compose file
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.DEPLOY_SSH_HOST }}
+          username: ${{ secrets.DEPLOY_SSH_USER }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          port: ${{ secrets.DEPLOY_SSH_PORT }}
+          source: "deploy/docker-compose.yml"
+          target: ${{ secrets.DEPLOY_DIR }}
+
+      - name: Remote setup and deploy
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.DEPLOY_SSH_HOST }}
+          username: ${{ secrets.DEPLOY_SSH_USER }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          port: ${{ secrets.DEPLOY_SSH_PORT }}
+          script: |
+            set -e
+            mkdir -p ${{ secrets.DEPLOY_DIR }}
+            cd ${{ secrets.DEPLOY_DIR }}
+            echo GHCR_OWNER=${{ github.repository_owner }} > .env
+            echo API_UPSTREAM=${{ secrets.API_UPSTREAM }} >> .env
+            echo SUPABASE_URL=${{ secrets.SUPABASE_URL }} >> .env
+            echo SUPABASE_KEY=${{ secrets.SUPABASE_KEY }} >> .env
+            docker login ghcr.io -u ${{ secrets.GHCR_USERNAME }} -p ${{ secrets.GHCR_TOKEN }}
+            docker compose pull
+            docker compose up -d
